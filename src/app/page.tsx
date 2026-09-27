@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import ScanPage from "@/components/ScanPage";
 import Dashboard from "@/components/Dashboard";
 import type { TriageResult, PullRequestListItem } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
 
 type View =
   | { kind: "scan" }
@@ -13,6 +14,23 @@ type View =
 export default function Home() {
   const [results, setResults] = useState<TriageResult[]>([]);
   const [view, setView] = useState<View>({ kind: "scan" });
+
+  // Load persisted results from Supabase on first mount
+  useEffect(() => {
+    supabase
+      .from("triage_results")
+      .select("result")
+      .order("updated_at", { ascending: false })
+      .limit(20)
+      .then(({ data, error }) => {
+        if (error) { console.warn("[supabase] load failed:", error.message); return; }
+        if (data && data.length > 0) {
+          const loaded = data.map((row) => row.result as TriageResult);
+          setResults(loaded);
+          setView({ kind: "dashboard" });
+        }
+      });
+  }, []);
 
   // Called when the user enters a repo URL — go straight to dashboard browse mode
   const handleBrowse = useCallback(
