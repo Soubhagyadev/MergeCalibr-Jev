@@ -33,7 +33,9 @@ export default function Home() {
       }
       return [result, ...prev];
     });
-    setView({ kind: "dashboard" });
+    setView((current) =>
+      current.kind === "browse" ? current : { kind: "dashboard" }
+    );
   }, []);
 
   const handleRerun = useCallback((_idx: number) => {
