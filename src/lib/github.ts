@@ -3,6 +3,7 @@ import {
   type ChangedFile,
   type GitHubRepo,
   type PRMetadata,
+  type PullRequestListItem,
   ERROR_CODES,
   TriageError,
 } from "./types";
@@ -38,6 +39,20 @@ export function parsePrUrl(url: string): GitHubRepo {
     throw new TriageError(ERROR_CODES.INVALID_URL, "Invalid PR number", 400);
   }
   return { owner, repo, number };
+}
+
+export function parseRepoUrl(url: string): Omit<GitHubRepo, "number"> {
+  const match = url.match(
+    /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/
+  );
+  if (!match) {
+    throw new TriageError(
+      ERROR_CODES.INVALID_URL,
+      "URL must be https://github.com/{owner}/{repo}",
+      400
+    );
+  }
+  return { owner: match[1], repo: match[2] };
 }
 
 /**
@@ -83,6 +98,55 @@ async function assertPublicRepo(
       ERROR_CODES.PUBLIC_REPOSITORY_REQUIRED,
       "MergeCallibr only analyzes public GitHub repositories.",
       403
+    );
+  }
+}
+
+/** Fetch the repository's open pull requests without running either model. */
+export async function fetchOpenPullRequests(
+  ref: Omit<GitHubRepo, "number">
+): Promise<PullRequestListItem[]> {
+  const octokit = getOctokit();
+  await assertPublicRepo(octokit, ref.owner, ref.repo);
+
+  try {
+    const data = await octokit.paginate(octokit.pulls.list, {
+      owner: ref.owner,
+      repo: ref.repo,
+      state: "open",
+      per_page: 100,
+      sort: "updated",
+      direction: "desc",
+    });
+
+    return data.map((pr) => ({
+      title: pr.title,
+      number: pr.number,
+      author: pr.user?.login ?? "unknown",
+      headRef: pr.head.ref,
+      baseRef: pr.base.ref,
+      state: pr.state,
+      htmlUrl: pr.html_url,
+      additions: 0,
+      deletions: 0,
+      filesChanged: 0,
+      repoFullName: pr.base.repo.full_name,
+      createdAt: pr.created_at,
+      updatedAt: pr.updated_at,
+    }));
+  } catch (err: unknown) {
+    const status = (err as { status?: number }).status;
+    if (status === 429) {
+      throw new TriageError(
+        ERROR_CODES.GITHUB_RATE_LIMIT,
+        "GitHub API rate limit exceeded. Please try again later.",
+        429
+      );
+    }
+    throw new TriageError(
+      ERROR_CODES.INTERNAL_ERROR,
+      "Failed to list pull requests from GitHub.",
+      502
     );
   }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parsePrUrl } from "@/lib/github";
+import { parsePrUrl, parseRepoUrl } from "@/lib/github";
 import { TriageError } from "@/lib/types";
 
 describe("parsePrUrl", () => {
@@ -47,5 +47,20 @@ describe("parsePrUrl", () => {
       "https://github.com/my-org/my-repo.js/pull/99"
     );
     expect(result).toEqual({ owner: "my-org", repo: "my-repo.js", number: 99 });
+  });
+});
+
+describe("parseRepoUrl", () => {
+  it("parses a valid repository URL", () => {
+    expect(parseRepoUrl("https://github.com/org/repo")).toEqual({
+      owner: "org",
+      repo: "repo",
+    });
+  });
+
+  it("rejects a pull request URL", () => {
+    expect(() => parseRepoUrl("https://github.com/org/repo/pull/123")).toThrow(
+      TriageError
+    );
   });
 });

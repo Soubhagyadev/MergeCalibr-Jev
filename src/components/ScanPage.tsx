@@ -1,12 +1,18 @@
 "use client";
 
 import { Fragment, useState, useRef } from "react";
-import type { TriageResult, TriageResponse } from "@/lib/types";
+import type {
+  PullRequestListItem,
+  PullRequestListResponse,
+  TriageResult,
+  TriageResponse,
+} from "@/lib/types";
 
 // ─── Scan states ──────────────────────────────────────────────────────────────
 type ScanState =
   | { phase: "idle" }
   | { phase: "validating" }
+  | { phase: "listing" }
   | { phase: "fetching" }
   | { phase: "summarizing" }
   | { phase: "evaluating" }
@@ -15,6 +21,7 @@ type ScanState =
 
 const PHASE_LABELS: Record<string, string> = {
   validating: "Validating URL…",
+  listing: "Loading open pull requests from GitHub…",
   fetching: "Fetching PR from GitHub…",
   summarizing: "DeepSeek is summarizing…",
   evaluating: "Jev is evaluating…",
@@ -26,20 +33,23 @@ interface ScanPageProps {
 
 export default function ScanPage({ onResult }: ScanPageProps) {
   const [url, setUrl] = useState("");
+  const [pullRequests, setPullRequests] = useState<PullRequestListItem[]>([]);
+  const [hasLoadedRepository, setHasLoadedRepository] = useState(false);
   const [state, setState] = useState<ScanState>({ phase: "idle" });
   const abortRef = useRef<AbortController | null>(null);
 
   const isRunning =
     state.phase === "validating" ||
+    state.phase === "listing" ||
     state.phase === "fetching" ||
     state.phase === "summarizing" ||
     state.phase === "evaluating";
 
-  async function handleScan(forceRerun = false) {
+  async function handleScan(targetUrl = url, forceRerun = false) {
     if (isRunning) return;
 
     // Basic client-side URL validation
-    const trimmed = url.trim();
+    const trimmed = targetUrl.trim();
     if (!trimmed) {
       setState({
         phase: "error",
@@ -49,19 +59,49 @@ export default function ScanPage({ onResult }: ScanPageProps) {
       return;
     }
 
-    const urlPattern =
+    const prUrlPattern =
       /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+$/;
-    if (!urlPattern.test(trimmed)) {
+    const repoUrlPattern =
+      /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+    if (!prUrlPattern.test(trimmed) && !repoUrlPattern.test(trimmed)) {
       setState({
         phase: "error",
         code: "INVALID_URL",
         message:
-          "URL must be https://github.com/{owner}/{repo}/pull/{number}",
+          "URL must be a GitHub repository or pull request link.",
       });
       return;
     }
 
     abortRef.current = new AbortController();
+
+    if (repoUrlPattern.test(trimmed)) {
+      setState({ phase: "listing" });
+      try {
+        const res = await fetch("/api/pulls", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repositoryUrl: trimmed }),
+          signal: abortRef.current.signal,
+        });
+        const data = (await res.json()) as PullRequestListResponse;
+        if (data.error) {
+          setState({ phase: "error", code: data.error.code, message: data.error.message });
+          return;
+        }
+        setPullRequests(data.data);
+        setHasLoadedRepository(true);
+        setState({ phase: "idle" });
+      } catch (err: unknown) {
+        if ((err as { name?: string }).name === "AbortError") return;
+        setState({
+          phase: "error",
+          code: "PROVIDER_FAILURE",
+          message: "Network error. Please try again.",
+        });
+      }
+      return;
+    }
 
     setState({ phase: "validating" });
     await sleep(300);
@@ -215,6 +255,8 @@ export default function ScanPage({ onResult }: ScanPageProps) {
               value={url}
               onChange={(e) => {
                 setUrl(e.target.value);
+                setPullRequests([]);
+                setHasLoadedRepository(false);
                 if (state.phase === "error") setState({ phase: "idle" });
               }}
               onKeyDown={(e) => {
@@ -262,7 +304,9 @@ export default function ScanPage({ onResult }: ScanPageProps) {
                   <span style={{ fontSize: "11px" }}>Running…</span>
                 </>
               ) : (
-                "Scan PR"
+                /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(url.trim())
+                  ? "Show PRs"
+                  : "Scan PR"
               )}
             </button>
           </div>
@@ -301,11 +345,117 @@ export default function ScanPage({ onResult }: ScanPageProps) {
                 margin: 0,
               }}
             >
-              MergeCallibr only reads the selected pull request and its changed
-              files. It does not modify or commit code.
+              Paste a repository link to browse its open PRs, or paste a PR link
+              to scan it directly. DeepSeek starts after you select a PR.
             </p>
           )}
         </div>
+
+        {hasLoadedRepository && (
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "baseline",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "var(--text-sm)",
+                  fontWeight: 600,
+                  color: "var(--color-text-primary)",
+                }}
+              >
+                Open pull requests
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-xs)",
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                {pullRequests.length} found
+              </span>
+            </div>
+            <div
+              style={{
+                width: "100%",
+                maxHeight: "280px",
+                overflowY: "auto",
+                border: "1px solid var(--color-border)",
+                borderRadius: "8px",
+                background: "var(--color-panel)",
+              }}
+            >
+              {pullRequests.length === 0 ? (
+                <div
+                  style={{
+                    padding: "16px 14px",
+                    fontFamily: "var(--font-sans)",
+                    fontSize: "var(--text-sm)",
+                    color: "var(--color-text-muted)",
+                  }}
+                >
+                  This repository has no open pull requests.
+                </div>
+              ) : (
+                pullRequests.map((pullRequest) => (
+                <button
+                  key={pullRequest.number}
+                  type="button"
+                  onClick={() => {
+                    setUrl(pullRequest.htmlUrl);
+                    void handleScan(pullRequest.htmlUrl);
+                  }}
+                  disabled={isRunning}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "5px",
+                    width: "100%",
+                    padding: "12px 14px",
+                    textAlign: "left",
+                    border: "none",
+                    borderBottom: "1px solid var(--color-border)",
+                    background: "transparent",
+                    cursor: isRunning ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: "var(--text-sm)",
+                      fontWeight: 500,
+                      color: "var(--color-text-primary)",
+                    }}
+                  >
+                    #{pullRequest.number} {pullRequest.title}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: "var(--text-xs)",
+                      color: "var(--color-text-muted)",
+                    }}
+                  >
+                    {pullRequest.author} → {pullRequest.baseRef}
+                  </span>
+                </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Pipeline strip */}
         <div

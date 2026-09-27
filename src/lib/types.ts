@@ -16,6 +16,30 @@ export const GitHubRepoSchema = z.object({
 });
 export type GitHubRepo = z.infer<typeof GitHubRepoSchema>;
 
+export const GitHubRepositoryUrlSchema = z
+  .string()
+  .regex(
+    /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/,
+    "Must be https://github.com/{owner}/{repo}"
+  );
+
+export const PullRequestListItemSchema = z.object({
+  title: z.string(),
+  number: z.number().int().positive(),
+  author: z.string(),
+  headRef: z.string(),
+  baseRef: z.string(),
+  state: z.string(),
+  htmlUrl: z.string(),
+  additions: z.number(),
+  deletions: z.number(),
+  filesChanged: z.number(),
+  repoFullName: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type PullRequestListItem = z.infer<typeof PullRequestListItemSchema>;
+
 export const PRMetadataSchema = z.object({
   title: z.string(),
   number: z.number(),
@@ -124,6 +148,20 @@ export interface TriageResponseErr {
 }
 
 export type TriageResponse = TriageResponseOk | TriageResponseErr;
+
+export interface PullRequestListResponseOk {
+  data: PullRequestListItem[];
+  error: null;
+}
+
+export interface PullRequestListResponseErr {
+  data: null;
+  error: { code: string; message: string };
+}
+
+export type PullRequestListResponse =
+  | PullRequestListResponseOk
+  | PullRequestListResponseErr;
 
 // ─── Error codes ─────────────────────────────────────────────────────────────
 
