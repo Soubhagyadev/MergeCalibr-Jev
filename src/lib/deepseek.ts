@@ -9,8 +9,8 @@ import {
 function getConfig() {
   return {
     baseUrl: process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
-    model: process.env.DEEPSEEK_MODEL ?? "deepseek/deepseek-v4.1-flash",
-    maxOutputTokens: parseInt(process.env.MAX_SUMMARY_OUTPUT_TOKENS ?? "4000", 10),
+    model: process.env.DEEPSEEK_MODEL ?? "deepseek/deepseek-chat-v3.1",
+    maxOutputTokens: parseInt(process.env.MAX_SUMMARY_OUTPUT_TOKENS ?? "24000", 10),
   };
 }
 
@@ -127,6 +127,7 @@ export async function summarizeWithDeepSeek(
         ],
         max_tokens: maxOutputTokens,
         temperature: 0.1,
+        reasoning: { effort: "none" },
         // NOTE: deepseek-v4.1-flash is a reasoning model and does NOT support
         // json_schema response_format — it returns 400. The system prompt enforces
         // raw JSON output instead, and parseJsonContent handles extraction.

@@ -13,7 +13,7 @@ export function buildScanKey(
   headSha: string
 ): string {
   // Read at call-time so the key reflects whatever model is active in env at request time.
-  const deepseekModel = process.env.DEEPSEEK_MODEL ?? "deepseek/deepseek-v4.1-flash";
+  const deepseekModel = process.env.DEEPSEEK_MODEL ?? "deepseek/deepseek-chat-v3.1";
   const jevModel = process.env.JEV_MODEL ?? "typesafe/jev-router";
   const raw = [
     `${owner}/${repo}`,
