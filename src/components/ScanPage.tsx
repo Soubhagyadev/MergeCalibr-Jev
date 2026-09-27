@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { Fragment, useState, useRef } from "react";
 import type { TriageResult, TriageResponse } from "@/lib/types";
 
 // ─── Scan states ──────────────────────────────────────────────────────────────
@@ -324,9 +324,8 @@ export default function ScanPage({ onResult }: ScanPageProps) {
             { num: "02", label: "Jev evaluates" },
             { num: "03", label: "MergeCallibr recommends" },
           ].map((step, i) => (
-            <>
+            <Fragment key={step.num}>
               <div
-                key={step.num}
                 style={{
                   display: "flex",
                   flexDirection: "column",
@@ -367,7 +366,7 @@ export default function ScanPage({ onResult }: ScanPageProps) {
                   →
                 </span>
               )}
-            </>
+            </Fragment>
           ))}
         </div>
       </div>

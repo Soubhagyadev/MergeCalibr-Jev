@@ -349,7 +349,6 @@ interface RightPaneProps {
 
 function RightPane({ result, onRerun }: RightPaneProps) {
   const { decision, pullRequest, summary, evaluation } = result;
-  const [showFullDiff, setShowFullDiff] = useState(false);
 
   const verdictConfig = {
     ESCALATED: {
@@ -840,8 +839,7 @@ function RightPane({ result, onRerun }: RightPaneProps) {
             </div>
           </div>
 
-          {!showFullDiff && (
-            <div
+          <div
               style={{
                 border: "1px solid var(--color-border)",
                 borderRadius: "var(--radius-md)",
@@ -894,8 +892,7 @@ function RightPane({ result, onRerun }: RightPaneProps) {
                   <span style={{ color: "var(--color-success-text)" }}>{f}</span>
                 </div>
               ))}
-            </div>
-          )}
+          </div>
         </div>
 
         {/* 7. Actions */}

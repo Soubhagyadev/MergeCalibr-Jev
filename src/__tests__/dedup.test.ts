@@ -5,7 +5,6 @@ import {
   getCachedResult,
   bustCache,
 } from "@/lib/dedup";
-import type { TriageResult } from "@/lib/types";
 
 describe("buildScanKey", () => {
   it("produces the same key for identical inputs", () => {

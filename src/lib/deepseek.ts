@@ -34,9 +34,39 @@ Rules:
 - Acknowledge uncertainty when evidence is incomplete.
 - Do NOT invent facts not present in the diff.
 - Do NOT produce Jev scores, security verdicts, or approve/reject recommendations.
-- Do NOT wrap the JSON in a markdown code fence.
+- Do NOT wrap the JSON in a markdown code fence or include any explanation outside the JSON object.
 - All array values must be non-empty strings.
 - If a category has no items, return an empty array [].`;
+
+const SUMMARY_RESPONSE_FORMAT = {
+  type: "json_schema",
+  json_schema: {
+    name: "deepseek_change_summary",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: {
+        overview: { type: "string" },
+        behaviorChanged: { type: "array", items: { type: "string" } },
+        potentialImpact: { type: "array", items: { type: "string" } },
+        reviewFocus: { type: "array", items: { type: "string" } },
+        affectedFiles: { type: "array", items: { type: "string" } },
+        affectedRoutes: { type: "array", items: { type: "string" } },
+        suspiciousSignals: { type: "array", items: { type: "string" } },
+      },
+      required: [
+        "overview",
+        "behaviorChanged",
+        "potentialImpact",
+        "reviewFocus",
+        "affectedFiles",
+        "affectedRoutes",
+        "suspiciousSignals",
+      ],
+      additionalProperties: false,
+    },
+  },
+} as const;
 
 interface OpenRouterUsage {
   prompt_tokens?: number;
@@ -49,6 +79,45 @@ interface OpenRouterResponse {
   }>;
   usage?: OpenRouterUsage;
   error?: { message?: string; code?: number };
+}
+
+function parseJsonContent(content: string): unknown {
+  const normalized = content
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/, "")
+    .trim();
+
+  try {
+    return JSON.parse(normalized);
+  } catch {
+    for (let start = normalized.indexOf("{"); start >= 0; start = normalized.indexOf("{", start + 1)) {
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+
+      for (let index = start; index < normalized.length; index++) {
+        const character = normalized[index];
+        if (inString) {
+          if (escaped) escaped = false;
+          else if (character === "\\") escaped = true;
+          else if (character === '"') inString = false;
+          continue;
+        }
+        if (character === '"') {
+          inString = true;
+        } else if (character === "{") {
+          depth++;
+        } else if (character === "}" && --depth === 0) {
+          try {
+            return JSON.parse(normalized.slice(start, index + 1));
+          } catch {
+            break;
+          }
+        }
+      }
+    }
+    throw new Error("No JSON object found");
+  }
 }
 
 export async function summarizeWithDeepSeek(
@@ -86,8 +155,8 @@ export async function summarizeWithDeepSeek(
         ],
         max_tokens: maxOutputTokens,
         temperature: 0.1,
-        // deepseek/deepseek-v4.1-flash explicitly supports response_format
-        response_format: { type: "json_object" },
+        // DeepSeek supports structured outputs; enforce the summary contract at the provider.
+        response_format: SUMMARY_RESPONSE_FORMAT,
       }),
       signal: AbortSignal.timeout(60_000),
     });
@@ -129,9 +198,7 @@ export async function summarizeWithDeepSeek(
 
   let parsed: unknown;
   try {
-    // Strip markdown code fences if the model wraps output (e.g. ```json ... ```)
-    const stripped = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-    parsed = JSON.parse(stripped);
+    parsed = parseJsonContent(content);
   } catch {
     throw new TriageError(
       ERROR_CODES.INVALID_MODEL_OUTPUT,
