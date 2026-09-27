@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { TriageResult, TriageDecision } from "@/lib/types";
+import type { TriageResult, TriageDecision, PullRequestListItem, TriageResponse } from "@/lib/types";
 
 // ─── Decision badge ───────────────────────────────────────────────────────────
 function DecisionBadge({
@@ -63,6 +63,12 @@ interface LeftPaneProps {
   onSelect: (idx: number) => void;
   filter: "all" | "ESCALATED" | "NEEDS_REVIEW" | "LOW_RISK";
   onFilter: (f: "all" | "ESCALATED" | "NEEDS_REVIEW" | "LOW_RISK") => void;
+  // Browse mode: un-triaged PRs from a repo URL
+  pullRequests?: PullRequestListItem[];
+  repoUrl?: string;
+  scanningPrNumber?: number | null;
+  onScanPr?: (pr: PullRequestListItem) => void;
+  onNewScan?: () => void;
 }
 
 function LeftPane({
@@ -71,6 +77,11 @@ function LeftPane({
   onSelect,
   filter,
   onFilter,
+  pullRequests = [],
+  repoUrl,
+  scanningPrNumber,
+  onScanPr,
+  onNewScan,
 }: LeftPaneProps) {
   const filters: Array<{
     key: "all" | "ESCALATED" | "NEEDS_REVIEW" | "LOW_RISK";
@@ -82,10 +93,21 @@ function LeftPane({
     { key: "LOW_RISK", label: "Approved" },
   ];
 
-  const visible =
+  // In browse mode the filter applies only to already-triaged results
+  const visibleResults =
     filter === "all"
       ? results
       : results.filter((r) => r.decision === filter);
+
+  // Un-triaged PRs that haven't been scanned yet
+  const triagedUrls = new Set(results.map((r) => r.pullRequest.htmlUrl));
+  const pendingPrs = pullRequests.filter((pr) => !triagedUrls.has(pr.htmlUrl));
+
+  // Repo name for header
+  const repoName =
+    repoUrl
+      ? repoUrl.replace("https://github.com/", "")
+      : results[0]?.pullRequest.repoFullName;
 
   return (
     <div
@@ -115,34 +137,53 @@ function LeftPane({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "var(--space-2)",
+            justifyContent: "space-between",
           }}
         >
-          <span
-            style={{
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--text-lg)",
-              fontWeight: 600,
-              color: "var(--color-text-primary)",
-            }}
-          >
-            MergeCallibr
-          </span>
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-xs)",
-              color: "var(--color-text-muted)",
-              background: "var(--color-bg)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-sm)",
-              padding: "2px 6px",
-            }}
-          >
-            v0.4
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+            <span
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: "var(--text-lg)",
+                fontWeight: 600,
+                color: "var(--color-text-primary)",
+              }}
+            >
+              MergeCallibr
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-xs)",
+                color: "var(--color-text-muted)",
+                background: "var(--color-bg)",
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-sm)",
+                padding: "2px 6px",
+              }}
+            >
+              v0.4
+            </span>
+          </div>
+          {onNewScan && (
+            <button
+              onClick={onNewScan}
+              style={{
+                background: "transparent",
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-sm)",
+                padding: "4px 10px",
+                fontFamily: "var(--font-sans)",
+                fontSize: "var(--text-xs)",
+                color: "var(--color-text-secondary)",
+                cursor: "pointer",
+              }}
+            >
+              + New scan
+            </button>
+          )}
         </div>
-        {results[0] && (
+        {repoName && (
           <span
             style={{
               fontFamily: "var(--font-sans)",
@@ -150,50 +191,149 @@ function LeftPane({
               color: "var(--color-text-secondary)",
             }}
           >
-            {results[0].pullRequest.repoFullName}
+            {repoName}
           </span>
         )}
       </div>
 
-      {/* Filter tabs */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--space-2)",
-          paddingBottom: "var(--space-4)",
-          paddingInline: "var(--space-5)",
-        }}
-      >
-        {filters.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => onFilter(f.key)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              padding: "6px 10px",
-              borderRadius: "var(--radius-sm)",
-              background: filter === f.key ? "var(--color-text-primary)" : "transparent",
-              color:
-                filter === f.key
-                  ? "var(--color-bg)"
-                  : "var(--color-text-secondary)",
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--text-sm)",
-              fontWeight: filter === f.key ? 500 : 400,
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+      {/* Filter tabs — only shown when there are triaged results */}
+      {results.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-2)",
+            paddingBottom: "var(--space-4)",
+            paddingInline: "var(--space-5)",
+          }}
+        >
+          {filters.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => onFilter(f.key)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                padding: "6px 10px",
+                borderRadius: "var(--radius-sm)",
+                background: filter === f.key ? "var(--color-text-primary)" : "transparent",
+                color:
+                  filter === f.key
+                    ? "var(--color-bg)"
+                    : "var(--color-text-secondary)",
+                fontFamily: "var(--font-sans)",
+                fontSize: "var(--text-sm)",
+                fontWeight: filter === f.key ? 500 : 400,
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* PR list */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {visible.length === 0 ? (
+        {/* Un-triaged (pending) PRs — always shown at top in browse mode */}
+        {pendingPrs.map((pr, i) => {
+          const isScanning = scanningPrNumber === pr.number;
+          return (
+            <button
+              key={`pending-${pr.number}`}
+              type="button"
+              onClick={() => onScanPr?.(pr)}
+              disabled={!!scanningPrNumber}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                padding: "var(--space-4) var(--space-5)",
+                width: "100%",
+                textAlign: "left",
+                background: "transparent",
+                borderLeft: "2px solid transparent",
+                borderTop: i === 0 && results.length === 0 ? "none" : "1px solid var(--color-border)",
+                borderBottom: "none",
+                borderRight: "none",
+                cursor: scanningPrNumber ? "not-allowed" : "pointer",
+                opacity: scanningPrNumber && !isScanning ? 0.5 : 1,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "var(--text-base)",
+                  fontWeight: 500,
+                  color: "var(--color-text-primary)",
+                  lineHeight: "18px",
+                }}
+              >
+                {pr.title}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "var(--text-xs)",
+                    color: "var(--color-text-muted)",
+                  }}
+                >
+                  #{pr.number}
+                </span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-sans)",
+                    fontSize: "var(--text-xs)",
+                    color: "var(--color-text-muted)",
+                  }}
+                >
+                  {pr.author} → {pr.baseRef}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                {isScanning ? (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontFamily: "var(--font-sans)",
+                      fontSize: "var(--text-xs)",
+                      color: "var(--color-text-muted)",
+                    }}
+                  >
+                    <DashboardSpinner /> Scanning…
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      fontSize: "var(--text-xs)",
+                      color: "var(--color-text-muted)",
+                      background: "var(--color-panel)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "var(--radius-sm)",
+                      padding: "1px 6px",
+                    }}
+                  >
+                    Click to scan
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
+
+        {/* Already-triaged results */}
+        {visibleResults.length === 0 && pendingPrs.length === 0 ? (
           <div
             style={{
               padding: "var(--space-6) var(--space-5)",
@@ -205,7 +345,7 @@ function LeftPane({
             No pull requests for this filter.
           </div>
         ) : (
-          visible.map((r, i) => {
+          visibleResults.map((r, i) => {
             const realIdx = results.indexOf(r);
             const selected = realIdx === selectedIdx;
             return (
@@ -224,7 +364,7 @@ function LeftPane({
                     ? "2px solid var(--color-text-primary)"
                     : "2px solid transparent",
                   borderTop: "1px solid var(--color-border)",
-                  borderBottom: i === visible.length - 1 ? "1px solid var(--color-border)" : "none",
+                  borderBottom: i === visibleResults.length - 1 ? "1px solid var(--color-border)" : "none",
                   borderRight: "none",
                   cursor: "pointer",
                 }}
@@ -1022,20 +1162,86 @@ function SummarySection({
   );
 }
 
+// ─── Dashboard spinner ────────────────────────────────────────────────────────
+function DashboardSpinner() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      style={{ animation: "spin 0.8s linear infinite", display: "inline-block" }}
+    >
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <circle
+        cx="6"
+        cy="6"
+        r="4.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray="14 8"
+      />
+    </svg>
+  );
+}
+
 // ─── Dashboard (two-pane) ─────────────────────────────────────────────────────
 
 interface DashboardProps {
   results: TriageResult[];
   onRerun: (idx: number) => void;
+  onNewScan?: () => void;
+  // Browse mode props
+  pullRequests?: PullRequestListItem[];
+  repoUrl?: string;
+  onResult?: (result: TriageResult) => void;
 }
 
-export default function Dashboard({ results, onRerun }: DashboardProps) {
+export default function Dashboard({
+  results,
+  onRerun,
+  onNewScan,
+  pullRequests,
+  repoUrl,
+  onResult,
+}: DashboardProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [filter, setFilter] = useState<
     "all" | "ESCALATED" | "NEEDS_REVIEW" | "LOW_RISK"
   >("all");
+  const [scanningPrNumber, setScanningPrNumber] = useState<number | null>(null);
+  const [scanPhase, setScanPhase] = useState<string>("");
 
   const selected = results[selectedIdx];
+
+  async function handleScanPr(pr: PullRequestListItem) {
+    if (scanningPrNumber) return;
+    setScanningPrNumber(pr.number);
+    setScanPhase("Fetching PR…");
+
+    try {
+      setScanPhase("DeepSeek is summarizing…");
+      const res = await fetch("/api/triage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pullRequestUrl: pr.htmlUrl }),
+      });
+      const data = (await res.json()) as TriageResponse;
+      setScanPhase("Jev is evaluating…");
+      await new Promise((r) => setTimeout(r, 200));
+
+      if (data.error) {
+        console.error("Triage error:", data.error);
+      } else {
+        onResult?.(data.data);
+      }
+    } catch (err) {
+      console.error("Network error:", err);
+    } finally {
+      setScanningPrNumber(null);
+      setScanPhase("");
+    }
+  }
 
   return (
     <div
@@ -1053,8 +1259,30 @@ export default function Dashboard({ results, onRerun }: DashboardProps) {
         onSelect={setSelectedIdx}
         filter={filter}
         onFilter={setFilter}
+        pullRequests={pullRequests}
+        repoUrl={repoUrl}
+        scanningPrNumber={scanningPrNumber}
+        onScanPr={handleScanPr}
+        onNewScan={onNewScan}
       />
-      {selected ? (
+      {scanningPrNumber ? (
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "12px",
+            color: "var(--color-text-muted)",
+            fontFamily: "var(--font-sans)",
+            fontSize: "var(--text-sm)",
+          }}
+        >
+          <DashboardSpinner />
+          <span>{scanPhase || "Scanning…"}</span>
+        </div>
+      ) : selected ? (
         <RightPane result={selected} onRerun={() => onRerun(selectedIdx)} />
       ) : (
         <div
@@ -1068,7 +1296,7 @@ export default function Dashboard({ results, onRerun }: DashboardProps) {
             fontSize: "var(--text-sm)",
           }}
         >
-          No pull request selected.
+          Select a pull request to scan it.
         </div>
       )}
     </div>

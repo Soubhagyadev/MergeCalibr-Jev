@@ -3,15 +3,28 @@
 import { useState, useCallback } from "react";
 import ScanPage from "@/components/ScanPage";
 import Dashboard from "@/components/Dashboard";
-import type { TriageResult } from "@/lib/types";
+import type { TriageResult, PullRequestListItem } from "@/lib/types";
+
+type View =
+  | { kind: "scan" }
+  | { kind: "browse"; pullRequests: PullRequestListItem[]; repoUrl: string }
+  | { kind: "dashboard" };
 
 export default function Home() {
   const [results, setResults] = useState<TriageResult[]>([]);
-  const [view, setView] = useState<"scan" | "dashboard">("scan");
+  const [view, setView] = useState<View>({ kind: "scan" });
 
+  // Called when the user enters a repo URL — go straight to dashboard browse mode
+  const handleBrowse = useCallback(
+    (pullRequests: PullRequestListItem[], repoUrl: string) => {
+      setView({ kind: "browse", pullRequests, repoUrl });
+    },
+    []
+  );
+
+  // Called when a triage result arrives (browse PR click or direct PR URL)
   const handleResult = useCallback((result: TriageResult) => {
     setResults((prev) => {
-      // Replace if same scan key exists, otherwise prepend
       const idx = prev.findIndex((r) => r.scanKey === result.scanKey);
       if (idx >= 0) {
         const next = [...prev];
@@ -20,26 +33,39 @@ export default function Home() {
       }
       return [result, ...prev];
     });
-    setView("dashboard");
+    setView({ kind: "dashboard" });
   }, []);
 
-  const handleRerun = useCallback(
-    (idx: number) => {
-      const result = results[idx];
-      if (!result) return;
-      setView("scan");
-    },
-    [results]
-  );
+  const handleRerun = useCallback((_idx: number) => {
+    setView({ kind: "scan" });
+  }, []);
 
-  if (view === "dashboard" && results.length > 0) {
+  const handleNewScan = useCallback(() => {
+    setView({ kind: "scan" });
+  }, []);
+
+  if (view.kind === "dashboard" && results.length > 0) {
     return (
       <Dashboard
         results={results}
         onRerun={handleRerun}
+        onNewScan={handleNewScan}
       />
     );
   }
 
-  return <ScanPage onResult={handleResult} />;
+  if (view.kind === "browse") {
+    return (
+      <Dashboard
+        results={results}
+        pullRequests={view.pullRequests}
+        repoUrl={view.repoUrl}
+        onRerun={handleRerun}
+        onNewScan={handleNewScan}
+        onResult={handleResult}
+      />
+    );
+  }
+
+  return <ScanPage onResult={handleResult} onBrowse={handleBrowse} />;
 }

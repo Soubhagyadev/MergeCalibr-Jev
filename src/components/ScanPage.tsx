@@ -29,12 +29,11 @@ const PHASE_LABELS: Record<string, string> = {
 
 interface ScanPageProps {
   onResult: (result: TriageResult) => void;
+  onBrowse: (pullRequests: PullRequestListItem[], repoUrl: string) => void;
 }
 
-export default function ScanPage({ onResult }: ScanPageProps) {
+export default function ScanPage({ onResult, onBrowse }: ScanPageProps) {
   const [url, setUrl] = useState("");
-  const [pullRequests, setPullRequests] = useState<PullRequestListItem[]>([]);
-  const [hasLoadedRepository, setHasLoadedRepository] = useState(false);
   const [state, setState] = useState<ScanState>({ phase: "idle" });
   const abortRef = useRef<AbortController | null>(null);
 
@@ -89,9 +88,8 @@ export default function ScanPage({ onResult }: ScanPageProps) {
           setState({ phase: "error", code: data.error.code, message: data.error.message });
           return;
         }
-        setPullRequests(data.data);
-        setHasLoadedRepository(true);
         setState({ phase: "idle" });
+        onBrowse(data.data, trimmed);
       } catch (err: unknown) {
         if ((err as { name?: string }).name === "AbortError") return;
         setState({
@@ -255,8 +253,6 @@ export default function ScanPage({ onResult }: ScanPageProps) {
               value={url}
               onChange={(e) => {
                 setUrl(e.target.value);
-                setPullRequests([]);
-                setHasLoadedRepository(false);
                 if (state.phase === "error") setState({ phase: "idle" });
               }}
               onKeyDown={(e) => {
@@ -351,111 +347,6 @@ export default function ScanPage({ onResult }: ScanPageProps) {
           )}
         </div>
 
-        {hasLoadedRepository && (
-          <div
-            style={{
-              width: "100%",
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "baseline",
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "var(--font-sans)",
-                  fontSize: "var(--text-sm)",
-                  fontWeight: 600,
-                  color: "var(--color-text-primary)",
-                }}
-              >
-                Open pull requests
-              </span>
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "var(--text-xs)",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                {pullRequests.length} found
-              </span>
-            </div>
-            <div
-              style={{
-                width: "100%",
-                maxHeight: "280px",
-                overflowY: "auto",
-                border: "1px solid var(--color-border)",
-                borderRadius: "8px",
-                background: "var(--color-panel)",
-              }}
-            >
-              {pullRequests.length === 0 ? (
-                <div
-                  style={{
-                    padding: "16px 14px",
-                    fontFamily: "var(--font-sans)",
-                    fontSize: "var(--text-sm)",
-                    color: "var(--color-text-muted)",
-                  }}
-                >
-                  This repository has no open pull requests.
-                </div>
-              ) : (
-                pullRequests.map((pullRequest) => (
-                <button
-                  key={pullRequest.number}
-                  type="button"
-                  onClick={() => {
-                    setUrl(pullRequest.htmlUrl);
-                    void handleScan(pullRequest.htmlUrl);
-                  }}
-                  disabled={isRunning}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "5px",
-                    width: "100%",
-                    padding: "12px 14px",
-                    textAlign: "left",
-                    border: "none",
-                    borderBottom: "1px solid var(--color-border)",
-                    background: "transparent",
-                    cursor: isRunning ? "not-allowed" : "pointer",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "var(--font-sans)",
-                      fontSize: "var(--text-sm)",
-                      fontWeight: 500,
-                      color: "var(--color-text-primary)",
-                    }}
-                  >
-                    #{pullRequest.number} {pullRequest.title}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "var(--font-sans)",
-                      fontSize: "var(--text-xs)",
-                      color: "var(--color-text-muted)",
-                    }}
-                  >
-                    {pullRequest.author} → {pullRequest.baseRef}
-                  </span>
-                </button>
-                ))
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Pipeline strip */}
         <div
