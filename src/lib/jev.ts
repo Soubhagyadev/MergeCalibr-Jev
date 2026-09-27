@@ -22,7 +22,6 @@ Return EXACTLY this JSON structure (no prose, no markdown fences):
 {
   "riskScore": <number 0..1>,
   "confidence": <number 0..1>,
-  "reviewRecommendation": "HUMAN_REVIEW" | "AI_REVIEW",
   "subsystem": "<string>",
   "securityFlawLikelihood": <number 0..1>,
   "riskAreas": [
@@ -40,8 +39,6 @@ Rules:
 - All numeric fields must be finite numbers in [0, 1].
 - riskAreas may be empty [].
 - severity must be exactly "LOW", "MEDIUM", or "HIGH".
-- reviewRecommendation must be exactly "HUMAN_REVIEW" or "AI_REVIEW".
-- Return HUMAN_REVIEW for sensitive changes, high-severity areas, incomplete evidence, or anything that needs developer judgment. Return AI_REVIEW only when the change is low risk and the evidence is strong.
 - Base scores on the summary evidence; do not invent facts.
 - Do NOT make approval/merge decisions. You are a typed signal source only.`;
 
@@ -57,11 +54,19 @@ interface OpenRouterResponse {
 }
 
 function parseJevContent(content: string): unknown {
-  const stripped = content
+  const normalized = content
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```\s*$/, "")
     .trim();
-  return JSON.parse(stripped);
+
+  try {
+    return JSON.parse(normalized);
+  } catch {
+    const start = normalized.indexOf("{");
+    const end = normalized.lastIndexOf("}");
+    if (start < 0 || end <= start) throw new Error("No JSON object found");
+    return JSON.parse(normalized.slice(start, end + 1));
+  }
 }
 
 export async function evaluateWithJev(

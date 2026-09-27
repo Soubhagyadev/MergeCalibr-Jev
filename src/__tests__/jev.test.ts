@@ -110,4 +110,24 @@ describe("evaluateWithJev", () => {
       evaluation,
     });
   });
+
+  it("accepts the documented Jev response without a review recommendation", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key");
+    const { reviewRecommendation, ...documentedEvaluation } = evaluation;
+    void reviewRecommendation;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: `Result:\n${JSON.stringify(documentedEvaluation)}` } }],
+          })
+        )
+      )
+    );
+
+    await expect(evaluateWithJev(summary, metadata, "request-3")).resolves.toMatchObject({
+      evaluation: documentedEvaluation,
+    });
+  });
 });
