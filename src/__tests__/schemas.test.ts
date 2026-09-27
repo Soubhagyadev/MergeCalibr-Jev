@@ -51,6 +51,7 @@ describe("JevEvaluationSchema", () => {
     const ok = JevEvaluationSchema.safeParse({
       riskScore: 0.88,
       confidence: 0.94,
+      reviewRecommendation: "HUMAN_REVIEW",
       subsystem: "auth",
       securityFlawLikelihood: 0.5,
       riskAreas: [
@@ -70,6 +71,7 @@ describe("JevEvaluationSchema", () => {
     const bad = JevEvaluationSchema.safeParse({
       riskScore: 1.5,
       confidence: 0.8,
+      reviewRecommendation: "HUMAN_REVIEW",
       subsystem: "auth",
       securityFlawLikelihood: 0.1,
       riskAreas: [],
@@ -82,6 +84,7 @@ describe("JevEvaluationSchema", () => {
     const bad = JevEvaluationSchema.safeParse({
       riskScore: 0.5,
       confidence: 0.8,
+      reviewRecommendation: "HUMAN_REVIEW",
       subsystem: "db",
       securityFlawLikelihood: 0.1,
       riskAreas: [
@@ -101,6 +104,7 @@ describe("JevEvaluationSchema", () => {
     const bad = JevEvaluationSchema.safeParse({
       riskScore: 0.5,
       confidence: 0.8,
+      reviewRecommendation: "HUMAN_REVIEW",
       subsystem: "db",
       securityFlawLikelihood: 0.1,
       riskAreas: [],

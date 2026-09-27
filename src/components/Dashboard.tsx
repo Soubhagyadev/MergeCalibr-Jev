@@ -594,7 +594,9 @@ function RightPane({ result, onRerun }: RightPaneProps) {
               lineHeight: "26px",
             }}
           >
-            {verdictConfig.action}
+            {evaluation.reviewRecommendation === "HUMAN_REVIEW"
+              ? "HUMAN REVIEW REQUIRED"
+              : "AI REVIEW SUFFICIENT"}
           </div>
           <div
             style={{

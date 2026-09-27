@@ -68,6 +68,7 @@ const JevRiskAreaSchema = z.object({
 export const JevEvaluationSchema = z.object({
   riskScore: z.number().min(0).max(1).finite(),
   confidence: z.number().min(0).max(1).finite(),
+  reviewRecommendation: z.enum(["HUMAN_REVIEW", "AI_REVIEW"]),
   subsystem: z.string().min(1),
   securityFlawLikelihood: z.number().min(0).max(1).finite(),
   riskAreas: z.array(JevRiskAreaSchema).min(0),

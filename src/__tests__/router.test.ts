@@ -5,6 +5,7 @@ import type { JevEvaluation } from "@/lib/types";
 const makeEval = (overrides: Partial<JevEvaluation> = {}): JevEvaluation => ({
   riskScore: 0.5,
   confidence: 0.8,
+  reviewRecommendation: "HUMAN_REVIEW",
   subsystem: "general",
   securityFlawLikelihood: 0.1,
   riskAreas: [],

@@ -32,6 +32,7 @@ const metadata: PRMetadata = {
 const evaluation = {
   riskScore: 0.38,
   confidence: 0.84,
+  reviewRecommendation: "HUMAN_REVIEW" as const,
   subsystem: "build tooling",
   securityFlawLikelihood: 0.02,
   riskAreas: [
