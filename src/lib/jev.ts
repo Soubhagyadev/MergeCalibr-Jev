@@ -137,15 +137,14 @@ export async function evaluateWithJev(
         "X-Title": "MergeCallibr",
         "X-Request-Id": requestId,
       },
-      // Jev Router advertises no optional parameters through OpenRouter.
-      // Keep JSON enforcement in the prompt and validate it below instead of
-      // sending unsupported max_tokens, temperature, or response_format fields.
       body: JSON.stringify({
         model,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userMessage },
         ],
+        max_tokens: 800,
+        temperature: 0.1,
       }),
       signal: AbortSignal.timeout(60_000),
     });
@@ -155,6 +154,15 @@ export async function evaluateWithJev(
         ERROR_CODES.RATE_LIMITED,
         "OpenRouter rate limit reached. Please try again shortly.",
         429
+      );
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new TriageError(
+        ERROR_CODES.PROVIDER_FAILURE,
+        `Jev provider returned HTTP ${res.status}: ${text.slice(0, 200)}`,
+        502
       );
     }
 

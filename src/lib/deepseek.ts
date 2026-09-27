@@ -10,7 +10,7 @@ function getConfig() {
   return {
     baseUrl: process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
     model: process.env.DEEPSEEK_MODEL ?? "deepseek/deepseek-v4.1-flash",
-    maxOutputTokens: parseInt(process.env.MAX_SUMMARY_OUTPUT_TOKENS ?? "1200", 10),
+    maxOutputTokens: parseInt(process.env.MAX_SUMMARY_OUTPUT_TOKENS ?? "4000", 10),
   };
 }
 
@@ -38,35 +38,6 @@ Rules:
 - All array values must be non-empty strings.
 - If a category has no items, return an empty array [].`;
 
-const SUMMARY_RESPONSE_FORMAT = {
-  type: "json_schema",
-  json_schema: {
-    name: "deepseek_change_summary",
-    strict: true,
-    schema: {
-      type: "object",
-      properties: {
-        overview: { type: "string" },
-        behaviorChanged: { type: "array", items: { type: "string" } },
-        potentialImpact: { type: "array", items: { type: "string" } },
-        reviewFocus: { type: "array", items: { type: "string" } },
-        affectedFiles: { type: "array", items: { type: "string" } },
-        affectedRoutes: { type: "array", items: { type: "string" } },
-        suspiciousSignals: { type: "array", items: { type: "string" } },
-      },
-      required: [
-        "overview",
-        "behaviorChanged",
-        "potentialImpact",
-        "reviewFocus",
-        "affectedFiles",
-        "affectedRoutes",
-        "suspiciousSignals",
-      ],
-      additionalProperties: false,
-    },
-  },
-} as const;
 
 interface OpenRouterUsage {
   prompt_tokens?: number;
@@ -75,7 +46,8 @@ interface OpenRouterUsage {
 
 interface OpenRouterResponse {
   choices?: Array<{
-    message?: { content?: string };
+    finish_reason?: string;
+    message?: { content?: string | null; reasoning?: string };
   }>;
   usage?: OpenRouterUsage;
   error?: { message?: string; code?: number };
@@ -155,10 +127,11 @@ export async function summarizeWithDeepSeek(
         ],
         max_tokens: maxOutputTokens,
         temperature: 0.1,
-        // DeepSeek supports structured outputs; enforce the summary contract at the provider.
-        response_format: SUMMARY_RESPONSE_FORMAT,
+        // NOTE: deepseek-v4.1-flash is a reasoning model and does NOT support
+        // json_schema response_format — it returns 400. The system prompt enforces
+        // raw JSON output instead, and parseJsonContent handles extraction.
       }),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(90_000),
     });
 
     if (res.status === 429) {
@@ -166,6 +139,15 @@ export async function summarizeWithDeepSeek(
         ERROR_CODES.RATE_LIMITED,
         "OpenRouter rate limit reached. Please try again shortly.",
         429
+      );
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new TriageError(
+        ERROR_CODES.PROVIDER_FAILURE,
+        `DeepSeek provider returned HTTP ${res.status}: ${text.slice(0, 200)}`,
+        502
       );
     }
 
@@ -187,7 +169,20 @@ export async function summarizeWithDeepSeek(
     );
   }
 
-  const content = raw.choices?.[0]?.message?.content;
+  const choice = raw.choices?.[0];
+
+  // DeepSeek v4.1-flash is a reasoning model — it spends tokens on internal
+  // reasoning before producing content. If the output was cut off, raise the
+  // limit (MAX_SUMMARY_OUTPUT_TOKENS env var, default 4000).
+  if (choice?.finish_reason === "length") {
+    throw new TriageError(
+      ERROR_CODES.INVALID_MODEL_OUTPUT,
+      "DeepSeek output was truncated (hit token limit). Increase MAX_SUMMARY_OUTPUT_TOKENS.",
+      502
+    );
+  }
+
+  const content = choice?.message?.content;
   if (!content) {
     throw new TriageError(
       ERROR_CODES.INVALID_MODEL_OUTPUT,

@@ -1214,10 +1214,13 @@ export default function Dashboard({
 
   const selected = results[selectedIdx];
 
+  const [scanError, setScanError] = useState<string | null>(null);
+
   async function handleScanPr(pr: PullRequestListItem) {
     if (scanningPrNumber) return;
     setScanningPrNumber(pr.number);
     setScanPhase("Fetching PR…");
+    setScanError(null);
 
     try {
       setScanPhase("DeepSeek is summarizing…");
@@ -1226,17 +1229,24 @@ export default function Dashboard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pullRequestUrl: pr.htmlUrl }),
       });
-      const data = (await res.json()) as TriageResponse;
+
+      let data: TriageResponse;
+      try {
+        data = (await res.json()) as TriageResponse;
+      } catch {
+        throw new Error(`Server returned a non-JSON response (HTTP ${res.status}). Check your API keys.`);
+      }
+
       setScanPhase("Jev is evaluating…");
       await new Promise((r) => setTimeout(r, 200));
 
       if (data.error) {
-        console.error("Triage error:", data.error);
+        throw new Error(data.error.message || `Error: ${data.error.code}`);
       } else {
         onResult?.(data.data);
       }
     } catch (err) {
-      console.error("Network error:", err);
+      setScanError(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       setScanningPrNumber(null);
       setScanPhase("");
@@ -1281,6 +1291,69 @@ export default function Dashboard({
         >
           <DashboardSpinner />
           <span>{scanPhase || "Scanning…"}</span>
+        </div>
+      ) : scanError ? (
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "12px",
+            padding: "40px",
+          }}
+        >
+          <div
+            style={{
+              background: "var(--color-danger-bg)",
+              border: "1px solid var(--color-danger-text)",
+              borderRadius: "8px",
+              padding: "16px 20px",
+              maxWidth: "520px",
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "var(--color-danger-text)",
+                letterSpacing: "0.8px",
+              }}
+            >
+              TRIAGE FAILED
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: "var(--text-sm)",
+                color: "var(--color-danger-text)",
+                lineHeight: "20px",
+              }}
+            >
+              {scanError}
+            </span>
+          </div>
+          <button
+            onClick={() => setScanError(null)}
+            style={{
+              background: "transparent",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius-sm)",
+              padding: "6px 16px",
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--text-sm)",
+              color: "var(--color-text-secondary)",
+              cursor: "pointer",
+            }}
+          >
+            Dismiss
+          </button>
         </div>
       ) : selected ? (
         <RightPane result={selected} onRerun={() => onRerun(selectedIdx)} />
