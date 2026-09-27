@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 import { parsePrUrl, fetchPR } from "@/lib/github";
 import { prepareDiff } from "@/lib/diff";
 import { summarizeWithDeepSeek, summarizeChunked } from "@/lib/deepseek";
@@ -188,10 +188,12 @@ export async function POST(req: NextRequest): Promise<NextResponse<TriageRespons
       };
 
       // Persist to Supabase — fire-and-forget, never blocks the response.
-      supabase
-        .from("triage_results")
-        .upsert({ scan_key: scanKey2, result, updated_at: new Date().toISOString() })
-        .then(({ error }) => { if (error) console.warn("[supabase] upsert failed:", error.message); });
+      const sb = getSupabase();
+      if (sb) {
+        sb.from("triage_results")
+          .upsert({ scan_key: scanKey2, result, updated_at: new Date().toISOString() })
+          .then(({ error }) => { if (error) console.warn("[supabase] upsert failed:", error.message); });
+      }
 
       return result;
     });

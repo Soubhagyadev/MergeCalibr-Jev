@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import ScanPage from "@/components/ScanPage";
 import Dashboard from "@/components/Dashboard";
 import type { TriageResult, PullRequestListItem } from "@/lib/types";
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 
 type View =
   | { kind: "scan" }
@@ -17,15 +17,17 @@ export default function Home() {
 
   // Load persisted results from Supabase on first mount
   useEffect(() => {
-    supabase
-      .from("triage_results")
+    const sb = getSupabase();
+    if (!sb) return;
+
+    sb.from("triage_results")
       .select("result")
       .order("updated_at", { ascending: false })
       .limit(20)
       .then(({ data, error }) => {
         if (error) { console.warn("[supabase] load failed:", error.message); return; }
         if (data && data.length > 0) {
-          const loaded = data.map((row) => row.result as TriageResult);
+          const loaded = data.map((row) => (row as { result: TriageResult }).result);
           setResults(loaded);
           setView({ kind: "dashboard" });
         }
