@@ -567,7 +567,7 @@ function getErrorDisplay(code: string, message: string): string {
     case "PROVIDER_FAILURE":
       return "The AI provider is temporarily unavailable. Please try again.";
     case "INVALID_MODEL_OUTPUT":
-      return "The model returned an unexpected response. Please try again.";
+      return message || "The model returned an unexpected response. Please try again.";
     default:
       return message || "An unexpected error occurred. Please try again.";
   }

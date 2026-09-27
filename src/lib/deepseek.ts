@@ -211,7 +211,7 @@ export async function summarizeWithDeepSeek(
   if (!result.success) {
     throw new TriageError(
       ERROR_CODES.INVALID_MODEL_OUTPUT,
-      `DeepSeek schema validation failed: ${result.error.issues[0]?.message ?? "unknown"}`,
+      `DeepSeek response did not match the expected summary format: ${result.error.issues[0]?.path.join(".") || "response"} ${result.error.issues[0]?.message ?? "unknown"}`,
       502
     );
   }

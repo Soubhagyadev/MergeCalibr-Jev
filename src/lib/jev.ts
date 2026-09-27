@@ -200,7 +200,7 @@ export async function evaluateWithJev(
   if (!result.success) {
     throw new TriageError(
       ERROR_CODES.INVALID_MODEL_OUTPUT,
-      `Jev schema validation failed: ${result.error.issues[0]?.message ?? "unknown"}`,
+      `Jev response did not match the expected typed format: ${result.error.issues[0]?.path.join(".") || "response"} ${result.error.issues[0]?.message ?? "unknown"}`,
       502
     );
   }

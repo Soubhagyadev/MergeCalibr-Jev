@@ -119,7 +119,7 @@ export async function fetchOpenPullRequests(
       direction: "desc",
     });
 
-    return data.map((pr) => ({
+    return data.slice(0, 5).map((pr) => ({
       title: pr.title,
       number: pr.number,
       author: pr.user?.login ?? "unknown",
