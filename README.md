@@ -1,6 +1,32 @@
 # MergeCallibr
 
+<p align="center">
+  <img src="assets/IBMBOB_Hackathon_Image.png" alt="MergeCallibr" width="720">
+</p>
+
 > **MergeCallibr is a probabilistic pull-request triage pipeline for public GitHub repositories. It uses DeepSeek to explain what a PR changes and Jev to produce calibrated risk and confidence signals. MergeCallibr classifies each PR as Low Risk, Needs Review, or Escalated, helping developers focus human attention where it matters most without modifying or merging code.**
+
+MergeCallibr helps reviewers decide where to spend human attention before opening a pull request in depth. It accepts a public GitHub pull-request URL, retrieves the change, generates a structured impact summary, and evaluates risk through a deterministic triage policy.
+
+## What it does
+
+```text
+Public GitHub PR
+  -> GitHub metadata and changed-file patches
+  -> DeepSeek change-impact summary
+  -> Jev typed risk and confidence signals
+  -> Deterministic triage decision
+```
+
+The dashboard presents the verdict, confidence, change impact, potential risk areas, and a diff preview. It also links back to the original GitHub pull request.
+
+Possible decisions are:
+
+- `LOW_RISK` - low risk with sufficient confidence and no strong security signal.
+- `NEEDS_REVIEW` - uncertain, incomplete, oversized, or medium-risk evidence.
+- `ESCALATED` - high risk, high-confidence risk, or a high-severity security signal.
+
+The application calculates the final decision. Neither model approves, merges, comments on, or modifies code.
 
 ## Stack
 
@@ -27,46 +53,30 @@ Public GitHub PR URL
 
 ```bash
 cp .env.example .env.local
-# Fill in OPENROUTER_API_KEY and GITHUB_API_TOKEN
 npm install
 npm run dev
 ```
+
+Add the required provider and GitHub credentials to `.env.local`. The example file contains the supported model, token-limit, and routing settings. Keep all secrets server-side and never commit `.env.local`.
+
+Open [http://localhost:3000](http://localhost:3000) and paste a public GitHub pull-request URL.
 
 ## Tests
 
 ```bash
 npm test
+npm run lint
+npm run build
 ```
 
-## Environment variables
+## Security and scope
 
-| Variable | Description |
-|---|---|
-| `OPENROUTER_API_KEY` | API key for OpenRouter (used for both DeepSeek and Jev) |
-| `OPENROUTER_BASE_URL` | OpenRouter base URL (default: `https://openrouter.ai/api/v1`) |
-| `DEEPSEEK_MODEL` | DeepSeek model (default: `deepseek/deepseek-v4.1-flash`) |
-| `JEV_MODEL` | Jev model (default: `typesafe/jev-latest`) |
-| `GITHUB_API_TOKEN` | GitHub token to improve public API rate limits |
-| `MAX_DIFF_INPUT_TOKENS` | Token limit for diff sent to DeepSeek (default: 18000) |
-| `MAX_SUMMARY_OUTPUT_TOKENS` | Max tokens for DeepSeek output (default: 1200) |
-| `MAX_JEV_INPUT_TOKENS` | Max tokens for Jev input (default: 6000) |
-| `LOW_RISK_MAX` | Threshold below which a PR is LOW_RISK (default: 0.25) |
-| `ESCALATED_MIN` | Threshold above which a PR is ESCALATED (default: 0.75) |
-| `MIN_CONFIDENCE` | Minimum confidence required for LOW_RISK or ESCALATED (default: 0.70) |
+- Only public GitHub repositories are analyzed. Private, inaccessible, or unverifiable repositories are rejected.
+- GitHub, OpenRouter, and Jev requests run server-side.
+- GitHub credentials are never sent to model providers.
+- The app does not write code, create commits, comment on pull requests, approve pull requests, or merge pull requests.
+- It does not use GitHub webhooks, OAuth, user accounts, or a persistent database.
 
 ## Vercel deployment
 
-Configure all secrets as Vercel Environment Variables. The triage function runs on the Node.js runtime with a 120-second duration limit.
-
-## Security
-
-- All GitHub, OpenRouter, and Jev calls are server-side only.
-- GitHub credentials are never sent to model providers.
-- Only public repositories (`private: false`) are analyzed.
-- A 404 from GitHub is not treated as proof that a repository is public.
-
-## What MergeCallibr does NOT do
-
-- It does not write code, commit changes, comment on PRs, approve PRs, or merge PRs.
-- It does not access private repositories.
-- It does not use GitHub webhooks or OAuth.
+Deploy the project to Vercel, configure the values from `.env.example` as Vercel Environment Variables, and keep them out of the client bundle. The triage endpoint uses the Node.js runtime with a bounded function duration.
